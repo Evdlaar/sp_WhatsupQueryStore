@@ -29,4 +29,4 @@ The sp_WhatsupQueryStore Stored Procedure is developed and maintained by Enrico 
 
 
 ## License
-[MIT](/LICENSE.md)
+[MIT](/license.md)
