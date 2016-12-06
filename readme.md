@@ -19,11 +19,31 @@ By running the script on this website the sp_WhatsupQueryStore Stored Procedure 
 
 After installation you can run the Stored Procedure as follows:
 
-**EXEC sp_WhatsupQueryStore @dbname, @timewindow, @topqueries**
+**
+EXEC sp_WhatsupQueryStore 
+    @dbname, 
+	@timewindow, 
+	@topqueries,
+	@return_store_config,
+	@return_forced_plans,
+	@return_top_duration,
+	@return_top_cpu,
+	@return_top_log_read,
+	@return_top_log_write,
+	@return_top_phys_read
+	
+**
 
 - @dbname : specify the database name that has Query Store data you want to analyze.
-- @timewindow : specify the time in hours the data aggragation has to go back. For instance, a '1' will return the top n queries executed in the last hour.
-- @topqueries : specify how many queries you want to return in the results. For instance, a '10' will return the top 10 queries.
+- @timewindow : specify the time in hours the data aggragation has to go back. For instance, a '1' will return the top n queries executed in the last hour. (optional)
+- @topqueries : specify how many queries you want to return in the results. For instance, a '10' will return the top 10 queries. (optional)
+- @return_store_config : show or hide the Query Store configuration window. A '0' indicates not returning the window, a '1' returns the window. '1' is set as the default. (optional)
+- @return_forced_plans : show or hide the Forced Query Store plans window. A '0' indicates not returning the window, a '1' returns the window. '1' is set as the default. (optional)
+- @return_top_duration : show or hide the Top queries based on avg. duration window.  A '0' indicates not returning the window, a '1' returns the window. '1' is set as the default. (optional)
+- @return_top_cpu : show or hide the Top queries based on avg. CPU time window. A '0' indicates not returning the window, a '1' returns the window. '1' is set as the default. (optional)
+- @return_top_log_read : show or hide the Top queries based on avg. logical read IO. A '0' indicates not returning the window, a '1' returns the window. '1' is set as the default. (optional)
+- @return_top_log_write : show or hide the Top queries based on avg. logical write IO. A '0' indicates not returning the window, a '1' returns the window. '1' is set as the default. (optional)
+- @return_top_phys_read : show or hide the Top queries based on avg. physical read IO. A '0' indicates not returning the window, a '1' returns the window. '1' is set as the default. (optional)
 
 The sp_WhatsupQueryStore Stored Procedure is developed and maintained by Enrico van de Laar (@evdlaar).
 
