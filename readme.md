@@ -19,8 +19,7 @@ By running the script on this website the sp_WhatsupQueryStore Stored Procedure 
 
 After installation you can run the Stored Procedure as follows:
 
-**
-EXEC sp_WhatsupQueryStore 
+** EXEC sp_WhatsupQueryStore 
     @dbname, 
 	@timewindow, 
 	@topqueries,
@@ -30,9 +29,7 @@ EXEC sp_WhatsupQueryStore
 	@return_top_cpu,
 	@return_top_log_read,
 	@return_top_log_write,
-	@return_top_phys_read
-	
-**
+	@return_top_phys_read**
 
 - @dbname : specify the database name that has Query Store data you want to analyze.
 - @timewindow : specify the time in hours the data aggragation has to go back. For instance, a '1' will return the top n queries executed in the last hour. (optional)
