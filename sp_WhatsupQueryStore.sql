@@ -1,8 +1,9 @@
 /*********************************************************************************************
-sp_WhatsupQueryStore v1.1
-(C) Enrico van de Laar (@evdlaar)
+sp_WhatsupQueryStore v1.2
+(C) Enrico van de Laar (Twitter: @evdlaar)
+https://github.com/Evdlaar/sp_WhatsupQueryStore
 
-Feedback: mailto:enrico@dotnine.net
+Feedback: mailto:enrico@dotnine.net 
 
 License: 
 	This script is free to download and use for personal, educational, and internal 
@@ -32,13 +33,17 @@ CREATE PROCEDURE sp_WhatsupQueryStore
 	@dbname VARCHAR(75),
 	@timewindow VARCHAR(4) = 1,
 	@topqueries VARCHAR(4) = 25,
-	@return_store_config INT = 1,
-	@return_forced_plans INT = 1,
-	@return_top_duration INT = 1,
-	@return_top_cpu INT = 1,
-	@return_top_log_read INT = 1,
-	@return_top_log_write INT = 1,
-	@return_top_phys_read INT = 1
+	@return_store_config INT = 0,
+	@return_forced_plans INT = 0,
+	@return_multiple_plans INT = 0,
+	@return_top_executed INT = 0,
+	@return_top_duration INT = 0,
+	@return_top_cpu INT = 0,
+	@return_top_log_read INT = 0,
+	@return_top_log_write INT = 0,
+	@return_top_phys_read INT = 0,
+	@return_all INT = 0,
+	@show_query_hints INT = 0
 
 AS
 
@@ -75,7 +80,7 @@ ELSE
 		-- Now that we detected that the Query Store is enabled on the target database
 		-- we can start grabbing information from it.
 
-		IF @return_store_config = 1
+		IF @return_store_config = 1 OR @return_all = 1
 			
 			BEGIN
 
@@ -113,7 +118,7 @@ ELSE
 		Forced Query Store plans
 		*/
 
-		IF @return_forced_plans = 1
+		IF @return_forced_plans = 1 OR @return_all = 1
 			BEGIN
 
 				SELECT 'Forced Query Store Execution Plans' AS 'Info'
@@ -146,85 +151,148 @@ ELSE
 		Queries with multiple execution plans
 		*/
 
-		SELECT 'Queries with multiple plans in the last ' + @timewindow + ' hour(s)' AS 'Info'
+		IF @return_multiple_plans = 1 OR @return_all = 1
+			
+			BEGIN
 
-		DECLARE @sql_qs_multiple_plans NVARCHAR(MAX)
+				SELECT 'Queries with multiple plans in the last ' + @timewindow + ' hour(s)' AS 'Info'
 
-		SET @sql_qs_multiple_plans =
-		N'WITH CTE_QS_Multiple_Plans (query_id, plan_count)
-			AS
-			(
-			SELECT
-			  qsp.query_id,
-			  COUNT(qsp.plan_id)
-			FROM ' + @dbname + '.sys.query_store_plan qsp WITH (NOLOCK)
-			WHERE CONVERT(datetime, SWITCHOFFSET(CONVERT(datetimeoffset, qsp.last_execution_time), DATENAME(TzOffset, SYSDATETIMEOFFSET()))) >= DATEADD(hour, -' + @timewindow + ', getdate())
-			GROUP BY query_id HAVING COUNT(plan_id) > 1
-			)
+				DECLARE @sql_qs_multiple_plans NVARCHAR(MAX)
 
-		SELECT
-		  cte.query_id AS ''Query ID'',
-		  CAST(qsp.query_plan AS XML) AS ''Execution Plan''
-		FROM CTE_QS_Multiple_Plans cte
-		INNER JOIN ' + @dbname + '.sys.query_store_plan qsp
-		  ON cte.query_id = qsp.query_id
-		INNER JOIN ' + @dbname + '.sys.query_store_query qsq WITH (NOLOCK)
-		  ON qsp.query_id = qsq.query_id
-		INNER JOIN ' + @dbname + '.sys.query_store_query_text qsqt WITH (NOLOCK)
-		  ON qsq.query_text_id = qsqt.query_text_id
-		WHERE CONVERT(datetime, SWITCHOFFSET(CONVERT(datetimeoffset, qsp.last_execution_time), DATENAME(TzOffset, SYSDATETIMEOFFSET()))) >= DATEADD(hour, -' + @timewindow + ', getdate())
-		ORDER BY cte.query_id ASC
-		'
+				IF @show_query_hints = 0
 
-		EXEC sp_executesql @sql_qs_multiple_plans
+					BEGIN
+
+						SET @sql_qs_multiple_plans =
+						N'WITH CTE_QS_Multiple_Plans (query_id, plan_count)
+							AS
+							(
+							SELECT
+							  qsp.query_id,
+							  COUNT(qsp.plan_id)
+							FROM ' + @dbname + '.sys.query_store_plan qsp WITH (NOLOCK)
+							WHERE CONVERT(datetime, SWITCHOFFSET(CONVERT(datetimeoffset, qsp.last_execution_time), DATENAME(TzOffset, SYSDATETIMEOFFSET()))) >= DATEADD(hour, -' + @timewindow + ', getdate())
+							GROUP BY query_id HAVING COUNT(plan_id) > 1
+							)
+
+						SELECT
+						  cte.query_id AS ''Query ID'',
+						  qsp.plan_id AS ''Plan ID'',
+						  CONVERT(datetime, SWITCHOFFSET(CONVERT(datetimeoffset, qsp.last_execution_time), DATENAME(TzOffset, SYSDATETIMEOFFSET()))) AS ''Last Execution Time'',
+						  qsqt.query_sql_text AS ''Query Text'',
+						  qsp.engine_version AS ''Engine Version'',
+						  qsp.[compatibility_level] AS ''Compatibility Level'',
+						  CAST(qsp.query_plan AS XML) AS ''Execution Plan''
+						FROM CTE_QS_Multiple_Plans cte
+						INNER JOIN ' + @dbname + '.sys.query_store_plan qsp
+						  ON cte.query_id = qsp.query_id
+						INNER JOIN ' + @dbname + '.sys.query_store_query qsq WITH (NOLOCK)
+						  ON qsp.query_id = qsq.query_id
+						INNER JOIN ' + @dbname + '.sys.query_store_query_text qsqt WITH (NOLOCK)
+						  ON qsq.query_text_id = qsqt.query_text_id
+						WHERE CONVERT(datetime, SWITCHOFFSET(CONVERT(datetimeoffset, qsp.last_execution_time), DATENAME(TzOffset, SYSDATETIMEOFFSET()))) >= DATEADD(hour, -' + @timewindow + ', getdate())
+						ORDER BY cte.query_id ASC
+						'
+
+						EXEC sp_executesql @sql_qs_multiple_plans
+
+					END
+
+				IF @show_query_hints = 1
+
+					BEGIN
+
+						SET @sql_qs_multiple_plans =
+						N'WITH CTE_QS_Multiple_Plans (query_id, plan_count)
+							AS
+							(
+							SELECT
+							  qsp.query_id,
+							  COUNT(qsp.plan_id)
+							FROM ' + @dbname + '.sys.query_store_plan qsp WITH (NOLOCK)
+							WHERE CONVERT(datetime, SWITCHOFFSET(CONVERT(datetimeoffset, qsp.last_execution_time), DATENAME(TzOffset, SYSDATETIMEOFFSET()))) >= DATEADD(hour, -' + @timewindow + ', getdate())
+							GROUP BY query_id HAVING COUNT(plan_id) > 1
+							)
+
+						SELECT
+						  cte.query_id AS ''Query ID'',
+						  qsp.plan_id AS ''Plan ID'',
+						  CONVERT(datetime, SWITCHOFFSET(CONVERT(datetimeoffset, qsp.last_execution_time), DATENAME(TzOffset, SYSDATETIMEOFFSET()))) AS ''Last Execution Time'',
+						  qsqt.query_sql_text AS ''Query Text'',
+						  qsp.engine_version AS ''Engine Version'',
+						  qsp.[compatibility_level] AS ''Compatibility Level'',
+						  CAST(qsp.query_plan AS XML) AS ''Execution Plan'',
+						  CAST(''-- Force Execution Plan '' + CAST(qsp.plan_id AS varchar) + '' for Query '' + CAST(cte.query_id AS varchar) + '' through the Query Store &#xD; EXEC sp_query_store_force_plan '' + CAST(cte.query_id AS varchar) + '', '' + CAST(qsp.plan_id AS varchar) + '''' AS XML) AS ''Force Plan''
+						FROM CTE_QS_Multiple_Plans cte
+						INNER JOIN ' + @dbname + '.sys.query_store_plan qsp
+						  ON cte.query_id = qsp.query_id
+						INNER JOIN ' + @dbname + '.sys.query_store_query qsq WITH (NOLOCK)
+						  ON qsp.query_id = qsq.query_id
+						INNER JOIN ' + @dbname + '.sys.query_store_query_text qsqt WITH (NOLOCK)
+						  ON qsq.query_text_id = qsqt.query_text_id
+						WHERE CONVERT(datetime, SWITCHOFFSET(CONVERT(datetimeoffset, qsp.last_execution_time), DATENAME(TzOffset, SYSDATETIMEOFFSET()))) >= DATEADD(hour, -' + @timewindow + ', getdate())
+						ORDER BY cte.query_id ASC
+						'
+
+						EXEC sp_executesql @sql_qs_multiple_plans
+
+					END
+
+			END
 
 		/*
 		SECTION 4
 		Top queries based on execution amount
 		*/
 
-		SELECT 'Most executed queries in the last ' + @timewindow + ' hour(s)' AS 'Info'
+		IF @return_top_executed = 1 OR @return_all = 1
+			
+			BEGIN
 
-		DECLARE @sql_qs_top_nr_executions NVARCHAR(MAX)
+				SELECT 'Most executed queries in the last ' + @timewindow + ' hour(s)' AS 'Info'
 
-		SET @sql_qs_top_nr_executions = 
-		N'WITH CTE_QS_Top_Executions (plan_id, exec_count)
-			AS
-			(
-			SELECT TOP ' + @topqueries + '
-			  qsrs.plan_id,
-			  SUM(qsrs.count_executions)
-			FROM ' + @dbname + '.sys.query_store_runtime_stats qsrs WITH (NOLOCK)
-			INNER JOIN ' + @dbname + '.sys.query_store_runtime_stats_interval qsrsi WITH (NOLOCK)
-			  ON qsrs.runtime_stats_interval_id = qsrsi.runtime_stats_interval_id
-			WHERE CONVERT(datetime, SWITCHOFFSET(CONVERT(datetimeoffset, qsrsi.end_time), DATENAME(TzOffset, SYSDATETIMEOFFSET()))) >= DATEADD(hour, -' + @timewindow + ', getdate())
-			GROUP BY qsrs.plan_id
-			ORDER BY SUM(qsrs.count_executions) DESC
-			)
+				DECLARE @sql_qs_top_nr_executions NVARCHAR(MAX)
 
-		SELECT
-		  cte.plan_id AS ''Plan ID'',
-		  qsp.query_id AS ''Query ID'',
-		  qsqt.query_sql_text AS ''Statement'',
-		  CAST(qsp.query_plan AS XML) AS ''Execution Plan'',
-		  cte.exec_count AS ''Execution count''
-		FROM CTE_QS_Top_Executions cte
-		INNER JOIN ' + @dbname + '.sys.query_store_plan qsp WITH (NOLOCK)
-		  ON cte.plan_id = qsp.plan_id
-		INNER JOIN ' + @dbname + '.sys.query_store_query qsq WITH (NOLOCK)
-		  ON qsp.query_id = qsq.query_id
-		INNER JOIN ' + @dbname + '.sys.query_store_query_text qsqt WITH (NOLOCK)
-		  ON qsq.query_text_id = qsqt.query_text_id
-		'
+				SET @sql_qs_top_nr_executions = 
+				N'WITH CTE_QS_Top_Executions (plan_id, exec_count)
+					AS
+					(
+					SELECT TOP ' + @topqueries + '
+					  qsrs.plan_id,
+					  SUM(qsrs.count_executions)
+					FROM ' + @dbname + '.sys.query_store_runtime_stats qsrs WITH (NOLOCK)
+					INNER JOIN ' + @dbname + '.sys.query_store_runtime_stats_interval qsrsi WITH (NOLOCK)
+					  ON qsrs.runtime_stats_interval_id = qsrsi.runtime_stats_interval_id
+					WHERE CONVERT(datetime, SWITCHOFFSET(CONVERT(datetimeoffset, qsrsi.end_time), DATENAME(TzOffset, SYSDATETIMEOFFSET()))) >= DATEADD(hour, -' + @timewindow + ', getdate())
+					GROUP BY qsrs.plan_id
+					ORDER BY SUM(qsrs.count_executions) DESC
+					)
+
+				SELECT
+				  cte.plan_id AS ''Plan ID'',
+				  qsp.query_id AS ''Query ID'',
+				  qsqt.query_sql_text AS ''Statement'',
+				  CAST(qsp.query_plan AS XML) AS ''Execution Plan'',
+				  cte.exec_count AS ''Execution count''
+				FROM CTE_QS_Top_Executions cte
+				INNER JOIN ' + @dbname + '.sys.query_store_plan qsp WITH (NOLOCK)
+				  ON cte.plan_id = qsp.plan_id
+				INNER JOIN ' + @dbname + '.sys.query_store_query qsq WITH (NOLOCK)
+				  ON qsp.query_id = qsq.query_id
+				INNER JOIN ' + @dbname + '.sys.query_store_query_text qsqt WITH (NOLOCK)
+				  ON qsq.query_text_id = qsqt.query_text_id
+				'
 		
-		EXEC sp_executesql @sql_qs_top_nr_executions
+				EXEC sp_executesql @sql_qs_top_nr_executions
+
+			END
 
 		/*
 		SECTION 5
 		Top queries based on average duration
 		*/
 
-		IF @return_top_duration = 1
+		IF @return_top_duration = 1 OR @return_all = 1
 			
 			BEGIN
 
@@ -277,7 +345,7 @@ ELSE
 		Top queries based on average CPU Time
 		*/
 
-		IF @return_top_cpu = 1
+		IF @return_top_cpu = 1 OR @return_all = 1
 			
 			BEGIN
 
@@ -330,7 +398,7 @@ ELSE
 		Top queries based on average logical IO reads
 		*/
 
-		IF @return_top_log_read = 1
+		IF @return_top_log_read = 1 OR @return_all = 1
 			
 			BEGIN
 
@@ -383,7 +451,7 @@ ELSE
 		Top queries based on average logical IO writes
 		*/
 
-		IF @return_top_log_write = 1
+		IF @return_top_log_write = 1 OR @return_all = 1
 			
 			BEGIN
 
@@ -436,7 +504,7 @@ ELSE
 		Top queries based on average physical IO reads
 		*/
 
-		IF @return_top_phys_read = 1
+		IF @return_top_phys_read = 1 OR @return_all = 1
 			
 			BEGIN
 
