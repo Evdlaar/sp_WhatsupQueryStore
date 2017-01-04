@@ -3,19 +3,19 @@ sp_WhatsupQueryStore v1.2
 (C) Enrico van de Laar (Twitter: @evdlaar)
 https://github.com/Evdlaar/sp_WhatsupQueryStore
 
-Feedback: mailto:enrico@dotnine.net 
+Feedback: mailto:enrico@dotnine.net
 
-License: 
-	This script is free to download and use for personal, educational, and internal 
-	corporate purposes, provided that this header is preserved. Redistribution or sale 
-	of this script, in whole or in part, is prohibited without the author's express 
+License:
+	This script is free to download and use for personal, educational, and internal
+	corporate purposes, provided that this header is preserved. Redistribution or sale
+	of this script, in whole or in part, is prohibited without the author's express
 	written consent.
 
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
-	INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
-	IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES 
-	OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+	INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+	IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+	OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 *********************************************************************************************/
@@ -25,11 +25,11 @@ GO
 
 -- Check if the sp_WhatsupQueryStore procedure is present
 -- if it is, drop it first.
-IF OBJECT_ID('sp_WhatsupQueryStore', 'P') IS NOT NULL
-DROP PROC sp_WhatsupQueryStore
+IF OBJECT_ID('dbo.sp_WhatsupQueryStore', 'P') IS NULL
+EXECUTE ('CREATE PROCEDURE dbo.sp_WhatsupQueryStore AS SELECT 1');
 GO
 
-CREATE PROCEDURE sp_WhatsupQueryStore
+ALTER PROCEDURE dbo.sp_WhatsupQueryStore
 	@dbname VARCHAR(75),
 	@timewindow VARCHAR(4) = 1,
 	@topqueries VARCHAR(4) = 25,
@@ -49,28 +49,25 @@ AS
 
 -- First we are going to check if the Query Store is enabled for the target database.
 -- If it is we can continue, otherwise end the execution.
-DECLARE @qs_enabled INT
-DECLARE @sql_detect_QS_enabled NVARCHAR(250)
-DECLARE @sql_detect_QS_enabled_params NVARCHAR(100)
+DECLARE @qs_enabled INT;
+DECLARE @sql_detect_QS_enabled NVARCHAR(250);
+DECLARE @sql_detect_QS_enabled_params NVARCHAR(100);
 
 SET @sql_detect_QS_enabled = 
 	N'SELECT @qs_enabledOut = is_query_store_on 
 	FROM sys.databases
 	WHERE [name] = ''' + @dbname + '''
-	'
-SET @sql_detect_QS_enabled_params = N'@qs_enabledOut int OUTPUT'
+	';
+SET @sql_detect_QS_enabled_params = N'@qs_enabledOut int OUTPUT';
 
-EXEC sp_executesql @sql_detect_QS_enabled, @sql_detect_QS_enabled_params, @qs_enabledOut = @qs_enabled OUTPUT
+EXEC sp_executesql @sql_detect_QS_enabled, @sql_detect_QS_enabled_params, @qs_enabledOut = @qs_enabled OUTPUT;
 
 IF @qs_enabled = 0
 		
 	BEGIN
-		
 		-- Query Store is not enabled on the target database, return an error and stop execution.
-		PRINT 'Query Store is not enabled on database "' + @dbname + '" aborting execution of sp_WhatsupQueryStore.'
-			
-		RETURN
-			
+		PRINT 'Query Store is not enabled on database "' + @dbname + '" aborting execution of sp_WhatsupQueryStore.';
+		RETURN;
 	END
 
 ELSE
@@ -89,9 +86,9 @@ ELSE
 				Query Store configuration
 				*/
 
-				SELECT 'Query Store Configuration' AS 'Info'
+				SELECT 'Query Store Configuration' AS 'Info';
 
-				DECLARE @sql_qs_config NVARCHAR(900)
+				DECLARE @sql_qs_config NVARCHAR(900);
 
 				SET @sql_qs_config =
 				N'SELECT
@@ -107,11 +104,11 @@ ELSE
 				  [max_plans_per_query] AS ''Maximum nr of plans per query'',
 				  size_based_cleanup_mode_desc AS ''Size based cleanup mode''
 				FROM ' + @dbname + '.sys.database_query_store_options
-				'
+				';
 
-				EXEC sp_executesql @sql_qs_config
+				EXEC sp_executesql @sql_qs_config;
 
-			END
+			END;
 
 		/*
 		SECTION 2
@@ -121,9 +118,9 @@ ELSE
 		IF @return_forced_plans = 1 OR @return_all = 1
 			BEGIN
 
-				SELECT 'Forced Query Store Execution Plans' AS 'Info'
+				SELECT 'Forced Query Store Execution Plans' AS 'Info';
 
-				DECLARE @sql_qs_forced_plans NVARCHAR(2000)
+				DECLARE @sql_qs_forced_plans NVARCHAR(2000);
 
 				SET @sql_qs_forced_plans = 
 				N'SELECT
@@ -140,11 +137,11 @@ ELSE
 				INNER JOIN ' + @dbname + '.sys.query_store_query_text qsqt WITH (NOLOCK)
 				  ON qsq.query_text_id = qsqt.query_text_id
 				WHERE qp.is_forced_plan = 1
-				'
+				';
 
-				EXEC sp_executesql @sql_qs_forced_plans
+				EXEC sp_executesql @sql_qs_forced_plans;
 
-			END
+			END;
 
 		/*
 		SECTION 3
@@ -155,9 +152,9 @@ ELSE
 			
 			BEGIN
 
-				SELECT 'Queries with multiple plans in the last ' + @timewindow + ' hour(s)' AS 'Info'
+				SELECT 'Queries with multiple plans in the last ' + @timewindow + ' hour(s)' AS 'Info';
 
-				DECLARE @sql_qs_multiple_plans NVARCHAR(MAX)
+				DECLARE @sql_qs_multiple_plans NVARCHAR(MAX);
 
 				IF @show_query_hints = 0
 
@@ -192,11 +189,11 @@ ELSE
 						  ON qsq.query_text_id = qsqt.query_text_id
 						WHERE CONVERT(datetime, SWITCHOFFSET(CONVERT(datetimeoffset, qsp.last_execution_time), DATENAME(TzOffset, SYSDATETIMEOFFSET()))) >= DATEADD(hour, -' + @timewindow + ', getdate())
 						ORDER BY cte.query_id ASC
-						'
+						';
 
-						EXEC sp_executesql @sql_qs_multiple_plans
+						EXEC sp_executesql @sql_qs_multiple_plans;
 
-					END
+					END;
 
 				IF @show_query_hints = 1
 
@@ -232,11 +229,11 @@ ELSE
 						  ON qsq.query_text_id = qsqt.query_text_id
 						WHERE CONVERT(datetime, SWITCHOFFSET(CONVERT(datetimeoffset, qsp.last_execution_time), DATENAME(TzOffset, SYSDATETIMEOFFSET()))) >= DATEADD(hour, -' + @timewindow + ', getdate())
 						ORDER BY cte.query_id ASC
-						'
+						';
 
-						EXEC sp_executesql @sql_qs_multiple_plans
+						EXEC sp_executesql @sql_qs_multiple_plans;
 
-					END
+					END;
 
 			END
 
@@ -249,9 +246,9 @@ ELSE
 			
 			BEGIN
 
-				SELECT 'Most executed queries in the last ' + @timewindow + ' hour(s)' AS 'Info'
+				SELECT 'Most executed queries in the last ' + @timewindow + ' hour(s)' AS 'Info';
 
-				DECLARE @sql_qs_top_nr_executions NVARCHAR(MAX)
+				DECLARE @sql_qs_top_nr_executions NVARCHAR(MAX);
 
 				SET @sql_qs_top_nr_executions = 
 				N'WITH CTE_QS_Top_Executions (plan_id, exec_count)
@@ -281,11 +278,11 @@ ELSE
 				  ON qsp.query_id = qsq.query_id
 				INNER JOIN ' + @dbname + '.sys.query_store_query_text qsqt WITH (NOLOCK)
 				  ON qsq.query_text_id = qsqt.query_text_id
-				'
+				';
 		
-				EXEC sp_executesql @sql_qs_top_nr_executions
+				EXEC sp_executesql @sql_qs_top_nr_executions;
 
-			END
+			END;
 
 		/*
 		SECTION 5
@@ -296,9 +293,9 @@ ELSE
 			
 			BEGIN
 
-				SELECT 'Most expensive queries based on avg. duration in the last ' + @timewindow + ' hour(s)' AS 'Info'
+				SELECT 'Most expensive queries based on avg. duration in the last ' + @timewindow + ' hour(s)' AS 'Info';
 
-				DECLARE @sql_qs_top_avg_duration NVARCHAR(MAX)
+				DECLARE @sql_qs_top_avg_duration NVARCHAR(MAX);
 	
 				SET @sql_qs_top_avg_duration = 
 				N'WITH CTE_QS_Top_Duration (plan_id, avg_duration, nr_executions, [max_duration], min_duration)
@@ -334,11 +331,11 @@ ELSE
 				  ON qsp.query_id = qsq.query_id
 				INNER JOIN ' + @dbname + '.sys.query_store_query_text qsqt WITH (NOLOCK)
 				  ON qsq.query_text_id = qsqt.query_text_id
-				'
+				';
 	
-				EXEC sp_executesql @sql_qs_top_avg_duration
+				EXEC sp_executesql @sql_qs_top_avg_duration;
 
-			END
+			END;
 	
 		/*
 		SECTION 6
@@ -349,9 +346,9 @@ ELSE
 			
 			BEGIN
 
-				SELECT 'Most expensive queries based on avg. CPU Time in the last ' + @timewindow + ' hour(s)' AS 'Info'
+				SELECT 'Most expensive queries based on avg. CPU Time in the last ' + @timewindow + ' hour(s)' AS 'Info';
 
-				DECLARE @sql_qs_top_avg_cputime NVARCHAR(MAX)
+				DECLARE @sql_qs_top_avg_cputime NVARCHAR(MAX);
 	
 				SET @sql_qs_top_avg_cputime =
 				N'WITH CTE_QS_Top_CPUTime (plan_id, avg_cputime, nr_executions, [max_cputime], min_cputime)
@@ -387,9 +384,9 @@ ELSE
 				  ON qsp.query_id = qsq.query_id
 				INNER JOIN ' + @dbname + '.sys.query_store_query_text qsqt WITH (NOLOCK)
 				  ON qsq.query_text_id = qsqt.query_text_id
-				'
+				';
 		
-				EXEC sp_executesql @sql_qs_top_avg_cputime	
+				EXEC sp_executesql @sql_qs_top_avg_cputime;
 
 			END
 
@@ -402,9 +399,9 @@ ELSE
 			
 			BEGIN
 
-				SELECT 'Most expensive queries based on avg. logical read IO in the last ' + @timewindow + ' hour(s)' AS 'Info'
+				SELECT 'Most expensive queries based on avg. logical read IO in the last ' + @timewindow + ' hour(s)' AS 'Info';
 
-				DECLARE @sql_qs_top_avg_log_io_read NVARCHAR(MAX)
+				DECLARE @sql_qs_top_avg_log_io_read NVARCHAR(MAX);
 		
 				SET @sql_qs_top_avg_log_io_read = 
 				N'WITH CTE_QS_Top_Log_IO_Read (plan_id, avg_log_io_read, nr_executions, [max_log_io_read], min_log_io_read)
@@ -440,11 +437,11 @@ ELSE
 				  ON qsp.query_id = qsq.query_id
 				INNER JOIN ' + @dbname + '.sys.query_store_query_text qsqt WITH (NOLOCK)
 				  ON qsq.query_text_id = qsqt.query_text_id
-				'
+				';
 
-				EXEC sp_executesql @sql_qs_top_avg_log_io_read
+				EXEC sp_executesql @sql_qs_top_avg_log_io_read;
 
-			END
+			END;
 
 		/*
 		SECTION 8
@@ -455,9 +452,9 @@ ELSE
 			
 			BEGIN
 
-				SELECT 'Most expensive queries based on avg. logical write IO in the last ' + @timewindow + ' hour(s)' AS 'Info'
+				SELECT 'Most expensive queries based on avg. logical write IO in the last ' + @timewindow + ' hour(s)' AS 'Info';
 
-				DECLARE @sql_qs_top_avg_log_io_write NVARCHAR(MAX)
+				DECLARE @sql_qs_top_avg_log_io_write NVARCHAR(MAX);
 		
 				SET @sql_qs_top_avg_log_io_write = 
 				N'WITH CTE_QS_Top_Log_IO_write (plan_id, avg_log_io_write, nr_executions, [max_log_io_write], min_log_io_write)
@@ -493,11 +490,11 @@ ELSE
 				  ON qsp.query_id = qsq.query_id
 				INNER JOIN ' + @dbname + '.sys.query_store_query_text qsqt WITH (NOLOCK)
 				  ON qsq.query_text_id = qsqt.query_text_id
-				'
+				';
 
-				EXEC sp_executesql @sql_qs_top_avg_log_io_write
+				EXEC sp_executesql @sql_qs_top_avg_log_io_write;
 
-			END
+			END;
 
 		/*
 		SECTION 9
@@ -508,9 +505,9 @@ ELSE
 			
 			BEGIN
 
-				SELECT 'Most expensive queries based on avg. physical read IO in the last ' + @timewindow + ' hour(s)' AS 'Info'
+				SELECT 'Most expensive queries based on avg. physical read IO in the last ' + @timewindow + ' hour(s)' AS 'Info';
 
-				DECLARE @sql_qs_top_avg_phys_io_read NVARCHAR(MAX)
+				DECLARE @sql_qs_top_avg_phys_io_read NVARCHAR(MAX);
 
 				SET @sql_qs_top_avg_phys_io_read =
 				N'WITH CTE_QS_Top_Phys_IO_read (plan_id, avg_phys_io_read, nr_executions, [max_phys_io_read], min_phys_io_read)
@@ -546,12 +543,11 @@ ELSE
 				  ON qsp.query_id = qsq.query_id
 				INNER JOIN ' + @dbname + '.sys.query_store_query_text qsqt WITH (NOLOCK)
 				  ON qsq.query_text_id = qsqt.query_text_id
-				  '
+				  ';
 
-				EXEC sp_executesql @sql_qs_top_avg_phys_io_read
+				EXEC sp_executesql @sql_qs_top_avg_phys_io_read;
 
-			END
+			END;
 
-	END
-
--- And we're done!
+	END;
+GO
